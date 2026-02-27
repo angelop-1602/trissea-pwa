@@ -1,0 +1,96 @@
+@import 'tailwindcss';
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 146 55% 17%;
+    --card: 0 0% 100%;
+    --card-foreground: 146 55% 17%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 146 55% 17%;
+    --primary: 146 55% 17%;
+    --primary-foreground: 45 100% 50%;
+    --secondary: 145 35% 45%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 45 100% 50%;
+    --accent-foreground: 146 55% 17%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 94%;
+    --input: 0 0% 96%;
+    --ring: 146 55% 17%;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    --font-mono: 'ui-monospace', 'SFMono-Regular', 'SF Mono', 'Menlo', 'Consolas', 'Liberation Mono', monospace;
+  }
+
+  .dark {
+    --background: 146 55% 12%;
+    --foreground: 0 0% 98%;
+    --card: 146 55% 18%;
+    --card-foreground: 0 0% 98%;
+    --popover: 146 55% 12%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 45 100% 50%;
+    --primary-foreground: 146 55% 17%;
+    --secondary: 145 35% 50%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 146 55% 25%;
+    --muted-foreground: 0 0% 70%;
+    --accent: 45 100% 50%;
+    --accent-foreground: 146 55% 17%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 146 55% 25%;
+    --input: 146 55% 22%;
+    --ring: 45 100% 50%;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+
+  * {
+    border-color: hsl(var(--border));
+    outline-color: hsl(var(--ring));
+  }
+  .maplibregl-popup-content {
+    @apply bg-transparent! shadow-none! p-0! rounded-none!;
+  }
+  .maplibregl-popup-tip {
+    @apply hidden!;
+  }
+}
+
+@layer utilities {
+  .status-searching {
+    @apply text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-950;
+  }
+
+  .status-matched {
+    @apply text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-950;
+  }
+
+  .status-en-route {
+    @apply text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-950;
+  }
+
+  .status-in-trip {
+    @apply text-purple-600 bg-purple-50 dark:text-purple-400 dark:bg-purple-950;
+  }
+
+  .status-completed {
+    @apply text-emerald-600 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950;
+  }
+
+  .status-cancelled {
+    @apply text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950;
+  }
+}
