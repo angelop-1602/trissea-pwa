@@ -38,9 +38,11 @@ export default function LandingPage() {
                   Get Started
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="w-full sm:w-auto">
-                Learn More
-              </Button>
+              <Link href="/signup">
+                <Button size="lg" variant="outline" className="w-full sm:w-auto">
+                  Create Account
+                </Button>
+              </Link>
             </div>
           </div>
         </section>
@@ -152,6 +154,11 @@ export default function LandingPage() {
             <Link href="/login">
               <Button size="lg" variant="secondary">
                 Sign In Now
+              </Button>
+            </Link>
+            <Link href="/signup">
+              <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10">
+                Sign Up
               </Button>
             </Link>
           </div>

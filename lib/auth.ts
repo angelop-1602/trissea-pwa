@@ -1,43 +1,97 @@
 import { NextRequest } from 'next/server';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
+import { createSupabaseRouteClient } from '@/lib/supabase/server-ssr';
+import type { User } from '@supabase/supabase-js';
 
 export type AuthContext = {
   supabaseUserId: string;
   phone?: string;
   email?: string;
-  bearerToken: string;
 };
 
-export async function requireAuth(request: NextRequest): Promise<AuthContext> {
-  const authorization = request.headers.get('authorization');
-  const authHeaderToken =
-    authorization && authorization.toLowerCase().startsWith('bearer ')
-      ? authorization.slice('bearer '.length).trim()
-      : '';
-  const cookieToken = request.cookies.get('sb-access-token')?.value?.trim() ?? '';
-  const bearerToken = authHeaderToken || cookieToken;
+export class AuthError extends Error {
+  readonly status: number;
+  readonly code: string;
 
-  if (!bearerToken) {
-    throw new Response(JSON.stringify({ error: 'Unauthorized.' }), {
-      status: 401,
-      headers: { 'content-type': 'application/json' },
-    });
+  constructor(message: string, status: number, code: string) {
+    super(message);
+    this.name = 'AuthError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+function extractBearerToken(request: NextRequest): string | null {
+  const authorization = request.headers.get('authorization');
+  if (!authorization) {
+    return null;
   }
 
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase.auth.getUser(bearerToken);
+  if (!authorization.toLowerCase().startsWith('bearer ')) {
+    return null;
+  }
+
+  const token = authorization.slice('bearer '.length).trim();
+  return token.length > 0 ? token : null;
+}
+
+function extractLegacyAccessToken(request: NextRequest): string | null {
+  const token = request.cookies.get('sb-access-token')?.value?.trim();
+  return token && token.length > 0 ? token : null;
+}
+
+function toAuthContext(user: User): AuthContext {
+  return {
+    supabaseUserId: user.id,
+    phone: user.phone ?? undefined,
+    email: user.email ?? undefined,
+  };
+}
+
+async function requireAuthByToken(token: string): Promise<AuthContext> {
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.auth.getUser(token);
 
   if (error || !data.user) {
-    throw new Response(JSON.stringify({ error: 'Unauthorized.' }), {
-      status: 401,
-      headers: { 'content-type': 'application/json' },
-    });
+    throw new AuthError('Unauthorized.', 401, 'AUTH_UNAUTHORIZED');
   }
 
-  return {
-    supabaseUserId: data.user.id,
-    phone: data.user.phone ?? undefined,
-    email: data.user.email ?? undefined,
-    bearerToken,
-  };
+  return toAuthContext(data.user);
+}
+
+export async function requireAuth(request: NextRequest): Promise<AuthContext> {
+  const bearerToken = extractBearerToken(request);
+  const legacyCookieToken = extractLegacyAccessToken(request);
+
+  if (bearerToken) {
+    return requireAuthByToken(bearerToken);
+  }
+
+  if (legacyCookieToken) {
+    try {
+      return await requireAuthByToken(legacyCookieToken);
+    } catch (error) {
+      if (error instanceof AuthError && error.code === 'AUTH_UNAVAILABLE') {
+        throw error;
+      }
+      // Fall back to SSR session cookies below.
+    }
+  }
+
+  try {
+    const supabase = await createSupabaseRouteClient();
+    const { data, error } = await supabase.auth.getUser();
+
+    if (error || !data.user) {
+      throw new AuthError('Unauthorized.', 401, 'AUTH_UNAUTHORIZED');
+    }
+
+    return toAuthContext(data.user);
+  } catch (error) {
+    if (error instanceof AuthError) {
+      throw error;
+    }
+
+    throw new AuthError('Authentication service unavailable.', 503, 'AUTH_UNAVAILABLE');
+  }
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -160,6 +161,13 @@ export default function LoginPage() {
               </Button>
             </form>
           )}
+
+          <p className="text-sm text-center text-muted-foreground">
+            New here?{' '}
+            <Link href="/signup" className="text-primary hover:underline">
+              Create an account
+            </Link>
+          </p>
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
         </CardContent>

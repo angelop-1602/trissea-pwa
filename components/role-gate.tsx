@@ -13,7 +13,7 @@ interface RoleGateProps {
 
 export function RoleGate({ role, children }: RoleGateProps) {
   const router = useRouter();
-  const { setCurrentUser, setCurrentTenant } = useStore();
+  const { setCurrentUser, setCurrentTenant, setCurrentRegion } = useStore();
   const [isAllowed, setIsAllowed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -42,6 +42,9 @@ export function RoleGate({ role, children }: RoleGateProps) {
       if (payload.tenant) {
         setCurrentTenant(payload.tenant);
       }
+      if (payload.region) {
+        setCurrentRegion(payload.region);
+      }
       setIsAllowed(true);
       setIsLoading(false);
     };
@@ -51,7 +54,7 @@ export function RoleGate({ role, children }: RoleGateProps) {
     return () => {
       active = false;
     };
-  }, [role, router, setCurrentTenant, setCurrentUser]);
+  }, [role, router, setCurrentRegion, setCurrentTenant, setCurrentUser]);
 
   if (isLoading || !isAllowed) {
     return (

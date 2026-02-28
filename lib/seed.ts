@@ -1,8 +1,12 @@
 import { getPrisma } from './prisma';
+import { ensurePhoneE164Compatibility } from './prisma-compat';
 
 const prisma = getPrisma();
 
 async function main() {
+  await ensurePhoneE164Compatibility(prisma);
+
+  await prisma.driverPresence.deleteMany();
   await prisma.driverOffer.deleteMany();
   await prisma.reservation.deleteMany();
   await prisma.ride.deleteMany();
@@ -63,6 +67,7 @@ async function main() {
       name: 'Paolo Reyes',
       email: 'paolo.reyes@example.com',
       phone: '+639123123123',
+      phoneE164: '+639123123123',
       role: 'passenger',
       tenantId: tenantMakati.id,
       avatar: '/placeholder-user.jpg',
@@ -78,6 +83,7 @@ async function main() {
       name: 'Ramon Cruz',
       email: 'ramon.cruz@example.com',
       phone: '+639321321321',
+      phoneE164: '+639321321321',
       role: 'driver',
       tenantId: tenantMakati.id,
       avatar: '/placeholder-user.jpg',
@@ -94,8 +100,22 @@ async function main() {
       name: 'Anna Rodriguez',
       email: 'admin@example.com',
       phone: '+639173456789',
+      phoneE164: '+639173456789',
       role: 'admin',
       tenantId: tenantMakati.id,
+    },
+  });
+
+  await prisma.driverPresence.create({
+    data: {
+      driverId: driver1.id,
+      tenantId: tenantMakati.id,
+      isOnline: true,
+      latitude: 14.5515,
+      longitude: 121.0225,
+      heading: 90,
+      accuracy: 10,
+      lastHeartbeatAt: new Date(),
     },
   });
 
@@ -105,6 +125,7 @@ async function main() {
       name: 'Admin System',
       email: 'superadmin@example.com',
       phone: '+639174567890',
+      phoneE164: '+639174567890',
       role: 'superadmin',
       tenantId: tenantMakati.id,
     },

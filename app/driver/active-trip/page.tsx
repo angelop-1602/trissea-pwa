@@ -1,65 +1,166 @@
 'use client';
 
-import { useStore } from '@/lib/store-context';
+import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AlertCircle,
+  Clock,
+  DollarSign,
+  FileText,
+  MapPin,
+  Navigation,
+  Phone,
+  TrendingUp,
+  Users,
+} from 'lucide-react';
+import type { Ride } from '@prisma/client';
 import { AppHeader } from '@/components/app-header';
 import { SidebarLayout } from '@/components/sidebar-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { MapView } from '@/components/map-view';
 import { StatusBadge } from '@/components/status-badge';
-import { mockDB } from '@/lib/mock-db';
-import { MapPin, DollarSign, Clock, Navigation, Users, TrendingUp, FileText, Phone, AlertCircle } from 'lucide-react';
+import { InlineErrorState, PageLoadingState } from '@/components/page-state';
+import { useStore } from '@/lib/store-context';
+import { getDriverActiveRide, transitionRide } from '@/lib/booking/client';
+import { useBookingRealtime } from '@/hooks/use-booking-realtime';
+import { useDriverPresence } from '@/hooks/use-driver-presence';
+
+type TransitionAction = 'start_heading' | 'arrive_pickup' | 'start_trip' | 'complete_trip' | 'driver_cancel';
+
+interface TransitionConfig {
+  action: TransitionAction;
+  label: string;
+  variant?: 'default' | 'outline';
+  className?: string;
+}
+
+const STATUS_STEPS = ['matched', 'en_route', 'arrived', 'in_trip', 'completed'] as const;
 
 export default function ActiveTripPage() {
-  const { currentUser, currentTenant, rides } = useStore();
+  const { currentUser, currentTenant } = useStore();
+  const [activeRide, setActiveRide] = useState<Ride | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [transitioningAction, setTransitioningAction] = useState<string | null>(null);
+  const isLoadingRideRef = useRef(false);
 
-  if (!currentUser || currentUser.role !== 'driver' || !currentTenant) {
-    return (
-      <div className="min-h-[30vh] flex items-center justify-center px-4">
-        <p className="text-sm text-muted-foreground">Loading your dashboard...</p>
-      </div>
-    );
+  const isDriver = currentUser?.role === 'driver' && Boolean(currentTenant);
+  useDriverPresence({ enabled: Boolean(isDriver) });
+
+  const loadActiveRide = useCallback(async () => {
+    if (!isDriver || isLoadingRideRef.current) return;
+
+    isLoadingRideRef.current = true;
+    try {
+      const response = await getDriverActiveRide();
+      setActiveRide(response.ride);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load active ride.');
+    } finally {
+      isLoadingRideRef.current = false;
+      setLoading(false);
+    }
+  }, [isDriver]);
+
+  useEffect(() => {
+    void loadActiveRide();
+  }, [loadActiveRide]);
+
+  useBookingRealtime({
+    enabled: Boolean(isDriver),
+    onUpdate: (payload) => {
+      if (payload.type === 'ride.updated') {
+        void loadActiveRide();
+      }
+    },
+  });
+
+  const sidebarItems = useMemo(
+    () => [
+      { href: '/driver/dashboard', label: 'Dashboard', icon: <MapPin className="h-4 w-4" /> },
+      { href: '/driver/offers', label: 'Assigned Rides', icon: <Users className="h-4 w-4" /> },
+      { href: '/driver/active-trip', label: 'Active Trip', icon: <TrendingUp className="h-4 w-4" /> },
+      { href: '/driver/earnings', label: 'Earnings', icon: <DollarSign className="h-4 w-4" /> },
+      { href: '/driver/history', label: 'History', icon: <FileText className="h-4 w-4" /> },
+    ],
+    []
+  );
+
+  const handleTransition = async (action: TransitionAction) => {
+    if (!activeRide) return;
+
+    setTransitioningAction(action);
+    setError(null);
+    try {
+      await transitionRide(activeRide.id, action);
+      await loadActiveRide();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update ride status.');
+    } finally {
+      setTransitioningAction(null);
+    }
+  };
+
+  if (!currentUser || currentUser.role !== 'driver' || !currentTenant || loading) {
+    return <PageLoadingState label="Loading active trip..." />;
   }
 
-  const sidebarItems = [
-    { href: '/driver/dashboard', label: 'Dashboard', icon: <MapPin className="h-4 w-4" /> },
-    { href: '/driver/offers', label: 'Ride Offers', icon: <Users className="h-4 w-4" /> },
-    { href: '/driver/active-trip', label: 'Active Trip', icon: <TrendingUp className="h-4 w-4" /> },
-    { href: '/driver/earnings', label: 'Earnings', icon: <DollarSign className="h-4 w-4" /> },
-    { href: '/driver/history', label: 'History', icon: <FileText className="h-4 w-4" /> },
-  ];
+  const transitionButtons: TransitionConfig[] = !activeRide
+    ? []
+    : activeRide.status === 'matched'
+      ? [
+          { action: 'start_heading', label: 'Start Heading', className: 'bg-green-600 hover:bg-green-700' },
+          { action: 'driver_cancel', label: 'Cancel Trip', variant: 'outline' },
+        ]
+      : activeRide.status === 'en_route'
+        ? [
+            { action: 'arrive_pickup', label: 'Arrived at Pickup', className: 'bg-green-600 hover:bg-green-700' },
+            { action: 'driver_cancel', label: 'Cancel Trip', variant: 'outline' },
+          ]
+        : activeRide.status === 'arrived'
+          ? [
+              { action: 'start_trip', label: 'Start Trip', className: 'bg-green-600 hover:bg-green-700' },
+              { action: 'driver_cancel', label: 'Cancel Trip', variant: 'outline' },
+            ]
+          : activeRide.status === 'in_trip'
+            ? [{ action: 'complete_trip', label: 'Complete Trip', className: 'bg-green-600 hover:bg-green-700' }]
+            : [];
 
-  // Get active trip
-  const activeRide = rides.find(
-    (r) =>
-      r.tenantId === currentTenant.id &&
-      ['matched', 'en-route', 'arrived', 'in-trip'].includes(r.status)
-  );
+  const stepIndex = activeRide ? STATUS_STEPS.indexOf(activeRide.status as (typeof STATUS_STEPS)[number]) : -1;
 
   return (
     <>
       <AppHeader />
-      <div className="max-w-7xl mx-auto px-4 pb-8">
+      <div className="mx-auto max-w-7xl px-4 pb-8">
         <SidebarLayout title="Driver Menu" items={sidebarItems}>
           <div className="space-y-6">
+            {error ? <InlineErrorState message={error} onRetry={() => void loadActiveRide()} /> : null}
+
             {!activeRide ? (
               <Card>
-                <CardContent className="pt-12 text-center">
-                  <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="font-semibold mb-2">No Active Trip</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    You don't have any active trips. Check ride offers to accept new requests.
+                <CardContent className="py-12 text-center">
+                  <AlertCircle className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+                  <h3 className="mb-1 font-semibold">No active trip</h3>
+                  <p className="mb-4 text-sm text-muted-foreground">
+                    You currently have no active ride. Check assigned rides for new matches.
                   </p>
-                  <Button className="bg-primary">Check Offers</Button>
+                  <Link href="/driver/offers">
+                    <Button>Open Assigned Rides</Button>
+                  </Link>
                 </CardContent>
               </Card>
             ) : (
               <>
-                {/* Map View */}
                 <MapView
                   pickupLocation={activeRide.pickupLocation}
                   dropoffLocation={activeRide.dropoffLocation}
-                  driverLocation={activeRide.driverLocation}
+                  driverLocation={
+                    typeof activeRide.driverLatitude === 'number' && typeof activeRide.driverLongitude === 'number'
+                      ? { latitude: activeRide.driverLatitude, longitude: activeRide.driverLongitude }
+                      : undefined
+                  }
                   pickupLat={activeRide.pickupLatitude}
                   pickupLon={activeRide.pickupLongitude}
                   dropoffLat={activeRide.dropoffLatitude}
@@ -67,117 +168,81 @@ export default function ActiveTripPage() {
                   height="h-96"
                 />
 
-                {/* Trip Details */}
                 <Card>
                   <CardHeader>
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <CardTitle className="text-lg">{activeRide.pickupLocation}</CardTitle>
-                        <CardDescription className="text-xs">→ {activeRide.dropoffLocation}</CardDescription>
+                        <CardTitle className="text-lg">Trip Progress</CardTitle>
+                        <CardDescription>{activeRide.pickupLocation} to {activeRide.dropoffLocation}</CardDescription>
                       </div>
                       <StatusBadge status={activeRide.status} />
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    <div className="grid grid-cols-4 gap-2 text-xs">
+                      {STATUS_STEPS.map((step, index) => {
+                        const isActive = stepIndex >= index;
+                        return (
+                          <div
+                            key={step}
+                            className={`rounded border px-2 py-1 text-center ${
+                              isActive ? 'border-green-300 bg-green-50 text-green-700' : 'text-muted-foreground'
+                            }`}
+                          >
+                            {step.replace('_', ' ')}
+                          </div>
+                        );
+                      })}
+                    </div>
+
                     <div className="grid grid-cols-4 gap-2">
-                      <div className="flex flex-col items-center p-2 rounded bg-muted/50">
-                        <Navigation className="h-4 w-4 text-primary mb-1" />
+                      <div className="flex flex-col items-center rounded bg-muted/50 p-2">
+                        <Navigation className="mb-1 h-4 w-4 text-primary" />
                         <span className="text-xs text-muted-foreground">{activeRide.distance}km</span>
                       </div>
-                      <div className="flex flex-col items-center p-2 rounded bg-muted/50">
-                        <Clock className="h-4 w-4 text-primary mb-1" />
+                      <div className="flex flex-col items-center rounded bg-muted/50 p-2">
+                        <Clock className="mb-1 h-4 w-4 text-primary" />
                         <span className="text-xs text-muted-foreground">{activeRide.estimatedDuration}m</span>
                       </div>
-                      <div className="flex flex-col items-center p-2 rounded bg-muted/50">
-                        <DollarSign className="h-4 w-4 text-primary mb-1" />
-                        <span className="text-xs font-medium">₱{activeRide.fare}</span>
+                      <div className="flex flex-col items-center rounded bg-muted/50 p-2">
+                        <DollarSign className="mb-1 h-4 w-4 text-primary" />
+                        <span className="text-xs font-medium">P{activeRide.fare}</span>
                       </div>
-                      <div className="flex flex-col items-center p-2 rounded bg-muted/50">
-                        <Users className="h-4 w-4 text-primary mb-1" />
+                      <div className="flex flex-col items-center rounded bg-muted/50 p-2">
+                        <Users className="mb-1 h-4 w-4 text-primary" />
                         <span className="text-xs text-muted-foreground">1 pax</span>
                       </div>
                     </div>
 
-                    {/* Passenger Info */}
-                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-                      <p className="font-medium text-sm mb-2">Passenger</p>
+                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                      <p className="mb-2 text-sm font-medium">Passenger</p>
                       <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium">Maria Santos</p>
-                          <p className="text-xs text-muted-foreground">4.8 rating • 42 rides</p>
-                        </div>
-                        <Button size="sm" variant="outline" className="gap-1">
+                        <p className="text-xs text-muted-foreground">Contact available in app</p>
+                        <Button size="sm" variant="outline" className="gap-1" disabled>
                           <Phone className="h-3 w-3" />
                           Call
                         </Button>
                       </div>
                     </div>
 
-                    {/* Trip Status */}
-                    <div className="space-y-2 p-3 rounded-lg bg-muted/50">
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
-                        Trip Progress
-                      </p>
-                      {['matched', 'en-route', 'arrived', 'in-trip', 'completed'].map((status) => (
-                        <div key={status} className="flex items-center gap-2 text-xs">
-                          <div
-                            className={`h-2 w-2 rounded-full ${
-                              ['matched', 'en-route', 'arrived', 'in-trip', 'completed'].indexOf(status) <=
-                              ['matched', 'en-route', 'arrived', 'in-trip', 'completed'].indexOf(activeRide.status)
-                                ? 'bg-primary'
-                                : 'bg-muted-foreground'
-                            }`}
-                          />
-                          <span className="capitalize">
-                            {status === 'en-route' ? 'En Route' : status === 'in-trip' ? 'In Trip' : status}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t">
-                      {activeRide.status === 'matched' && (
-                        <>
-                          <Button className="bg-green-600 hover:bg-green-700" size="sm">
-                            Heading to Pickup
+                    {transitionButtons.length > 0 ? (
+                      <div className={`grid gap-2 ${transitionButtons.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                        {transitionButtons.map((item) => (
+                          <Button
+                            key={item.action}
+                            variant={item.variant ?? 'default'}
+                            className={item.className}
+                            size="sm"
+                            disabled={transitioningAction !== null}
+                            onClick={() => void handleTransition(item.action)}
+                          >
+                            {transitioningAction === item.action ? 'Updating...' : item.label}
                           </Button>
-                          <Button variant="outline" size="sm">
-                            Cancel Trip
-                          </Button>
-                        </>
-                      )}
-                      {activeRide.status === 'en-route' && (
-                        <>
-                          <Button className="bg-green-600 hover:bg-green-700" size="sm">
-                            Arrived at Pickup
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            Update Location
-                          </Button>
-                        </>
-                      )}
-                      {activeRide.status === 'arrived' && (
-                        <>
-                          <Button className="bg-green-600 hover:bg-green-700" size="sm">
-                            Start Trip
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            Passenger Not Found
-                          </Button>
-                        </>
-                      )}
-                      {activeRide.status === 'in-trip' && (
-                        <>
-                          <Button className="bg-green-600 hover:bg-green-700" size="sm">
-                            Complete Trip
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            Report Issue
-                          </Button>
-                        </>
-                      )}
-                    </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No transition available for current status.</p>
+                    )}
                   </CardContent>
                 </Card>
               </>
@@ -188,4 +253,3 @@ export default function ActiveTripPage() {
     </>
   );
 }
-

@@ -1,30 +1,74 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createSupabaseAnonServerClient } from '@/lib/supabase/server';
+import { normalizePhoneE164 } from '@/lib/auth/phone';
+import {
+  bookingError,
+  bookingSuccess,
+  getRequestIdFromHeaders,
+  rateLimitedResponse,
+} from '@/lib/booking/http';
+import { checkEndpointRateLimit } from '@/lib/security/rate-limit-endpoint';
+import { verifyTurnstile } from '@/lib/security/turnstile';
 
 const bodySchema = z.object({
   phone: z.string().min(6),
 });
 
 export async function POST(request: NextRequest) {
+  const requestId = getRequestIdFromHeaders(request.headers);
   const json = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(json);
 
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
+    return bookingError(requestId, 'Invalid request body.', 400, 'INVALID_REQUEST');
   }
 
   try {
+    const normalizedPhone = normalizePhoneE164(parsed.data.phone);
+
+    const botCheck = await verifyTurnstile(request);
+    if (!botCheck.ok) {
+      return bookingError(
+        requestId,
+        botCheck.reason ?? 'Bot verification failed.',
+        botCheck.unavailable ? 503 : 400,
+        botCheck.unavailable ? 'AUTH_UNAVAILABLE' : 'INVALID_REQUEST'
+      );
+    }
+
+    const ipLimit = checkEndpointRateLimit(request, {
+      scope: 'auth.sms.send.ip',
+      limit: 20,
+      windowMs: 10 * 60_000,
+    });
+    if (!ipLimit.allowed) {
+      return rateLimitedResponse(requestId, ipLimit.retryAfterSeconds);
+    }
+
+    const phoneLimit = checkEndpointRateLimit(request, {
+      scope: 'auth.sms.send.phone',
+      limit: 5,
+      windowMs: 10 * 60_000,
+      keyParts: [normalizedPhone],
+    });
+    if (!phoneLimit.allowed) {
+      return rateLimitedResponse(requestId, phoneLimit.retryAfterSeconds);
+    }
+
     const supabase = createSupabaseAnonServerClient();
     const { error } = await supabase.auth.signInWithOtp({
-      phone: parsed.data.phone,
+      phone: normalizedPhone,
+      options: {
+        shouldCreateUser: true,
+      },
     });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return bookingError(requestId, error.message, 400, 'INVALID_REQUEST');
     }
 
-    return NextResponse.json({ ok: true });
+    return bookingSuccess(requestId, { ok: true });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Failed to contact authentication provider.';
@@ -34,13 +78,13 @@ export async function POST(request: NextRequest) {
       message.includes('ECONNREFUSED') ||
       message.includes('ETIMEDOUT');
 
-    return NextResponse.json(
-      {
-        error: isNetworkIssue
-          ? 'Auth service is unreachable. Verify NEXT_PUBLIC_SUPABASE_URL and your network.'
-          : 'Failed to send OTP.',
-      },
-      { status: isNetworkIssue ? 503 : 500 }
+    return bookingError(
+      requestId,
+      isNetworkIssue
+        ? 'Auth service is unreachable. Verify NEXT_PUBLIC_SUPABASE_URL and your network.'
+        : 'Failed to send OTP.',
+      isNetworkIssue ? 503 : 500,
+      isNetworkIssue ? 'AUTH_UNAVAILABLE' : 'INTERNAL_ERROR'
     );
   }
 }

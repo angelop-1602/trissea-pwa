@@ -1,7 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { bookingSuccess, getRequestIdFromHeaders } from '@/lib/booking/http';
 
-export async function POST() {
-  const response = NextResponse.json({ ok: true });
+export async function POST(request: NextRequest) {
+  const requestId = getRequestIdFromHeaders(request.headers);
+  const response = bookingSuccess(requestId, { ok: true });
 
   response.cookies.set('sb-access-token', '', {
     httpOnly: true,
