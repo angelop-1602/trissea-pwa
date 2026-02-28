@@ -18,7 +18,11 @@ export default function OnDemandBookingPage() {
   const [activeRideId, setActiveRideId] = useState<string | null>(null);
 
   if (!currentUser || currentUser.role !== 'passenger' || !currentTenant) {
-    return null;
+    return (
+      <div className="min-h-[30vh] flex items-center justify-center px-4">
+        <p className="text-sm text-muted-foreground">Loading your dashboard...</p>
+      </div>
+    );
   }
 
   const tenantRides = rides.filter((r) => r.tenantId === currentTenant.id && r.rideType === 'on-demand');
@@ -179,3 +183,4 @@ export default function OnDemandBookingPage() {
     </>
   );
 }
+

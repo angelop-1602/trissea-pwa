@@ -1,4 +1,4 @@
-import { UserRole } from '@/lib/mock-db';
+import type { UserRole } from '@prisma/client';
 
 export const ROLE_HOME_ROUTE: Record<UserRole, string> = {
   passenger: '/passenger/home',

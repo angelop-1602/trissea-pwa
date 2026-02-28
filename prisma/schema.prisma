@@ -1,0 +1,188 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "binary"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model DriverOffer {
+  id        String      @id
+  rideId    String
+  driverId  String
+  status    OfferStatus
+  expiresAt DateTime
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  User      User        @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  Ride      Ride        @relation(fields: [rideId], references: [id], onDelete: Cascade)
+
+  @@index([driverId])
+  @@index([expiresAt])
+  @@index([rideId])
+  @@index([status])
+}
+
+model Region {
+  id           String   @id
+  name         String
+  country      String
+  logo         String?
+  primaryColor String?
+  accentColor  String?
+  provinces    String[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  Tenant       Tenant[]
+
+  @@index([country])
+}
+
+model Reservation {
+  id            String            @id
+  tenantId      String
+  passengerId   String
+  terminalId    String
+  boardingTime  DateTime
+  status        ReservationStatus
+  queuePosition Int
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  User          User              @relation(fields: [passengerId], references: [id], onDelete: Cascade)
+  Tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  TODATerminal  TODATerminal      @relation(fields: [terminalId], references: [id], onDelete: Cascade)
+
+  @@index([passengerId])
+  @@index([status])
+  @@index([tenantId])
+  @@index([terminalId])
+}
+
+model Ride {
+  id                          String        @id
+  tenantId                    String
+  passengerId                 String
+  driverId                    String?
+  pickupLocation              String
+  dropoffLocation             String
+  pickupLatitude              Float
+  pickupLongitude             Float
+  dropoffLatitude             Float
+  dropoffLongitude            Float
+  status                      RideStatus
+  fare                        Float
+  distance                    Float
+  estimatedDuration           Int
+  actualDuration              Int?
+  rideType                    String
+  driverLatitude              Float?
+  driverLongitude             Float?
+  createdAt                   DateTime      @default(now())
+  startedAt                   DateTime?
+  completedAt                 DateTime?
+  updatedAt                   DateTime      @updatedAt
+  DriverOffer                 DriverOffer[]
+  User_Ride_driverIdToUser    User?         @relation("Ride_driverIdToUser", fields: [driverId], references: [id])
+  User_Ride_passengerIdToUser User          @relation("Ride_passengerIdToUser", fields: [passengerId], references: [id], onDelete: Cascade)
+  Tenant                      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([driverId])
+  @@index([passengerId])
+  @@index([status])
+  @@index([tenantId])
+}
+
+model TODATerminal {
+  id            String        @id
+  name          String
+  location      String
+  tenantId      String
+  latitude      Float
+  longitude     Float
+  capacity      Int
+  currentQueued Int           @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  Reservation   Reservation[]
+  Tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model Tenant {
+  id           String         @id
+  name         String
+  regionId     String
+  logo         String?
+  primaryColor String?
+  accentColor  String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  Reservation  Reservation[]
+  Ride         Ride[]
+  TODATerminal TODATerminal[]
+  Region       Region         @relation(fields: [regionId], references: [id])
+  User         User[]
+
+  @@index([regionId])
+}
+
+model User {
+  id                          String        @id
+  supabaseId                  String?       @unique
+  name                        String
+  email                       String?
+  phone                       String        @unique
+  role                        UserRole
+  tenantId                    String
+  avatar                      String?
+  rating                      Float?
+  completedRides              Int?          @default(0)
+  balance                     Float?        @default(0)
+  bankAccount                 String?
+  createdAt                   DateTime      @default(now())
+  updatedAt                   DateTime      @updatedAt
+  DriverOffer                 DriverOffer[]
+  Reservation                 Reservation[]
+  Ride_Ride_driverIdToUser    Ride[]        @relation("Ride_driverIdToUser")
+  Ride_Ride_passengerIdToUser Ride[]        @relation("Ride_passengerIdToUser")
+  Tenant                      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([phone])
+  @@index([role])
+  @@index([supabaseId])
+  @@index([tenantId])
+}
+
+enum OfferStatus {
+  pending
+  accepted
+  rejected
+  expired
+}
+
+enum ReservationStatus {
+  pending
+  confirmed
+  arrived
+  completed
+  cancelled
+}
+
+enum RideStatus {
+  searching
+  matched
+  en_route
+  arrived
+  in_trip
+  completed
+  cancelled
+}
+
+enum UserRole {
+  passenger
+  driver
+  admin
+  superadmin
+}

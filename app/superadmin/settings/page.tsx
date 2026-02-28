@@ -12,7 +12,11 @@ export default function SuperadminSettingsPage() {
   const { currentUser } = useStore();
 
   if (!currentUser || currentUser.role !== 'superadmin') {
-    return null;
+    return (
+      <div className="min-h-[30vh] flex items-center justify-center px-4">
+        <p className="text-sm text-muted-foreground">Loading your dashboard...</p>
+      </div>
+    );
   }
 
   const sidebarItems = [
@@ -138,3 +142,4 @@ export default function SuperadminSettingsPage() {
     </>
   );
 }
+

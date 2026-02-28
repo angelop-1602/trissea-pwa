@@ -1,38 +1,59 @@
 'use client';
 
-import { ReactNode, useEffect } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useStore } from '@/lib/store-context';
-import { UserRole } from '@/lib/mock-db';
 import { getHomeRouteForRole } from '@/lib/role-routes';
+import type { UserRole } from '@prisma/client';
+import { useStore } from '@/lib/store-context';
 
 interface RoleGateProps {
   role: UserRole;
   children: ReactNode;
-  requiresTenant?: boolean;
 }
 
-export function RoleGate({ role, children, requiresTenant = true }: RoleGateProps) {
-  const { currentUser, currentTenant } = useStore();
+export function RoleGate({ role, children }: RoleGateProps) {
   const router = useRouter();
+  const { setCurrentUser, setCurrentTenant } = useStore();
+  const [isAllowed, setIsAllowed] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!currentUser) {
-      router.replace('/login');
-      return;
-    }
+    let active = true;
 
-    if (currentUser.role !== role) {
-      router.replace(getHomeRouteForRole(currentUser.role));
-      return;
-    }
+    const loadProfile = async () => {
+      const response = await fetch('/api/me', { cache: 'no-store' });
+      const payload = await response.json().catch(() => ({}));
 
-    if (requiresTenant && !currentTenant) {
-      router.replace('/login');
-    }
-  }, [currentTenant, currentUser, requiresTenant, role, router]);
+      if (!active) {
+        return;
+      }
 
-  if (!currentUser || currentUser.role !== role || (requiresTenant && !currentTenant)) {
+      if (!response.ok || !payload.user?.role) {
+        router.replace('/login');
+        return;
+      }
+
+      if (payload.user.role !== role) {
+        router.replace(getHomeRouteForRole(payload.user.role));
+        return;
+      }
+
+      setCurrentUser(payload.user);
+      if (payload.tenant) {
+        setCurrentTenant(payload.tenant);
+      }
+      setIsAllowed(true);
+      setIsLoading(false);
+    };
+
+    void loadProfile();
+
+    return () => {
+      active = false;
+    };
+  }, [role, router, setCurrentTenant, setCurrentUser]);
+
+  if (isLoading || !isAllowed) {
     return (
       <div className="min-h-[30vh] flex items-center justify-center px-4">
         <p className="text-sm text-muted-foreground">Loading your dashboard...</p>

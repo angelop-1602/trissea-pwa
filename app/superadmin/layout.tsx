@@ -5,9 +5,5 @@ export default function SuperadminLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
-    <RoleGate role="superadmin" requiresTenant={false}>
-      {children}
-    </RoleGate>
-  );
+  return <RoleGate role="superadmin">{children}</RoleGate>;
 }

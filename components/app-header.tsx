@@ -11,11 +11,15 @@ interface AppHeaderProps {
   showDevTools?: boolean;
 }
 
-export function AppHeader({ showDevTools = true }: AppHeaderProps) {
-  const { currentUser, setCurrentUser } = useStore();
+export function AppHeader({ showDevTools = false }: AppHeaderProps) {
+  const { setCurrentUser } = useStore();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+    });
     setCurrentUser(null);
+    window.location.href = '/login';
   };
 
   return (

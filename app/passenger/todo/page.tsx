@@ -14,7 +14,11 @@ export default function TODAQueuePage() {
   const [selectedTerminalId, setSelectedTerminalId] = useState<string | null>(null);
 
   if (!currentUser || currentUser.role !== 'passenger' || !currentTenant) {
-    return null;
+    return (
+      <div className="min-h-[30vh] flex items-center justify-center px-4">
+        <p className="text-sm text-muted-foreground">Loading your dashboard...</p>
+      </div>
+    );
   }
 
   const terminals = mockDB.getTerminalsByTenant(currentTenant.id);
@@ -182,3 +186,4 @@ export default function TODAQueuePage() {
     </>
   );
 }
+

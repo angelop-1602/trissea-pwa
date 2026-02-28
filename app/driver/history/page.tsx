@@ -13,7 +13,11 @@ export default function DriverHistoryPage() {
   const { currentUser, currentTenant, rides } = useStore();
 
   if (!currentUser || currentUser.role !== 'driver' || !currentTenant) {
-    return null;
+    return (
+      <div className="min-h-[30vh] flex items-center justify-center px-4">
+        <p className="text-sm text-muted-foreground">Loading your dashboard...</p>
+      </div>
+    );
   }
 
   const sidebarItems = [
@@ -155,3 +159,4 @@ export default function DriverHistoryPage() {
     </>
   );
 }
+

@@ -13,7 +13,7 @@ import { Card } from '@/components/ui/card';
 interface DataTableColumn<T> {
   key: keyof T;
   label: string;
-  render?: (value: T[keyof T], row: T) => React.ReactNode;
+  render?: (value: any, row: T) => React.ReactNode;
   className?: string;
 }
 
